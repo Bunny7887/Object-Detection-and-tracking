@@ -1,0 +1,1246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VisionTrack AI – Object Detection Dashboard</title>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+    <!-- Google Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <!-- Anime.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+    <style>
+        /* ============================================================
+               GLOBAL RESET & VARIABLES
+               ============================================================ */
+        *,
+        *::before,
+        *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #0b0e1a;
+            --bg-panel: rgba(255, 255, 255, 0.04);
+            --bg-card: rgba(0, 0, 0, 0.35);
+            --border-glass: rgba(255, 255, 255, 0.06);
+            --border-glass-hover: rgba(255, 255, 255, 0.12);
+            --text-primary: #eef2ff;
+            --text-secondary: #94a3b8;
+            --accent-cyan: #00e5ff;
+            --accent-blue: #0077be;
+            --accent-green: #4ade80;
+            --accent-red: #f87171;
+            --shadow-glow: 0 0 30px rgba(0, 229, 255, 0.15);
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            --radius-sm: 12px;
+            --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: radial-gradient(circle at 10% 30%, #0b0b1a, #141432, #1a1a3e);
+            color: var(--text-primary);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        /* ============================================================
+               DASHBOARD LAYOUT
+               ============================================================ */
+        .dashboard {
+            display: flex;
+            gap: 24px;
+            width: 100%;
+            max-width: 1600px;
+            height: 90vh;
+            max-height: 900px;
+            background: var(--bg-panel);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            border: 1px solid var(--border-glass);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        /* ============================================================
+               VIDEO PANEL
+               ============================================================ */
+        .video-container {
+            flex: 1;
+            background: #0a0a18;
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            position: relative;
+            border: 2px solid transparent;
+            transition: border-color var(--transition), box-shadow var(--transition);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        .video-container.active {
+            border-color: rgba(0, 255, 255, 0.5);
+            box-shadow: var(--shadow-glow);
+        }
+
+        .video-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: block;
+        }
+
+        /* ----- Placeholder ----- */
+        .video-placeholder {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+            gap: 16px;
+            pointer-events: none;
+            transition: opacity 0.4s;
+        }
+
+        .video-placeholder .icon {
+            font-size: 72px;
+            color: #2a2a4a;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        .video-placeholder h3 {
+            font-size: 20px;
+            font-weight: 600;
+            color: #64748b;
+        }
+
+        .video-placeholder p {
+            font-size: 14px;
+            color: #334155;
+        }
+
+        @keyframes float {
+            0%,
+            100% {
+                transform: translateY(0);
+            }
+            50% {
+                transform: translateY(-10px);
+            }
+        }
+
+        /* ----- Scanline overlay (active) ----- */
+        .scanline {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(to right, transparent, rgba(0, 229, 255, 0.6), transparent);
+            box-shadow: 0 0 20px rgba(0, 229, 255, 0.5);
+            z-index: 5;
+            opacity: 0;
+            transition: opacity 0.5s;
+            pointer-events: none;
+        }
+
+        .video-container.active .scanline {
+            opacity: 1;
+            animation: scan 2s linear infinite;
+        }
+
+        @keyframes scan {
+            0% {
+                top: 0;
+            }
+            100% {
+                top: 100%;
+            }
+        }
+
+        /* ----- Loading spinner overlay ----- */
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 16px;
+            z-index: 6;
+            border-radius: var(--radius-lg);
+        }
+
+        .loading-overlay.show {
+            display: flex;
+        }
+
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 3px solid rgba(0, 229, 255, 0.1);
+            border-top: 3px solid var(--accent-cyan);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* ============================================================
+               RIGHT PANEL
+               ============================================================ */
+        .panel {
+            width: 340px;
+            min-width: 340px;
+            background: var(--bg-panel);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-radius: var(--radius-lg);
+            padding: 24px 20px;
+            border: 1px solid var(--border-glass);
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            overflow-y: auto;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+
+        .panel::-webkit-scrollbar {
+            width: 4px;
+        }
+        .panel::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .panel::-webkit-scrollbar-thumb {
+            background: var(--accent-cyan);
+            border-radius: 4px;
+        }
+
+        /* ----- Header ----- */
+        .panel-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-bottom: 1px solid var(--border-glass);
+            padding-bottom: 14px;
+        }
+
+        .panel-header i {
+            font-size: 28px;
+            color: var(--accent-cyan);
+            filter: drop-shadow(0 0 8px rgba(0, 229, 255, 0.4));
+        }
+
+        .panel-header h2 {
+            font-weight: 700;
+            font-size: 20px;
+            background: linear-gradient(135deg, #a5f3fc, var(--accent-cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .badge {
+            margin-left: auto;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 4px 12px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(148, 163, 184, 0.15);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-glass);
+            transition: all var(--transition);
+        }
+
+        .badge.on {
+            background: rgba(74, 222, 128, 0.15);
+            color: var(--accent-green);
+            border-color: rgba(74, 222, 128, 0.2);
+        }
+
+        .badge.off {
+            background: rgba(248, 113, 113, 0.15);
+            color: var(--accent-red);
+            border-color: rgba(248, 113, 113, 0.2);
+        }
+
+        /* ----- Groups (cards) ----- */
+        .group {
+            background: var(--bg-card);
+            border-radius: var(--radius-md);
+            padding: 14px 16px;
+            border: 1px solid var(--border-glass);
+            transition: border-color var(--transition);
+        }
+
+        .group:hover {
+            border-color: var(--border-glass-hover);
+        }
+
+        .group-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            margin-bottom: 8px;
+        }
+
+        .group-label i {
+            color: var(--accent-cyan);
+            width: 18px;
+        }
+
+        .group input,
+        .group select {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-glass);
+            background: rgba(0, 0, 0, 0.4);
+            color: var(--text-primary);
+            font-size: 14px;
+            outline: none;
+            transition: border var(--transition), box-shadow var(--transition);
+        }
+
+        .group input:focus,
+        .group select:focus {
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 0 3px rgba(0, 229, 255, 0.15);
+        }
+
+        .group input::placeholder {
+            color: #475569;
+        }
+
+        .file-feedback {
+            display: none;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-top: 6px;
+        }
+
+        .file-feedback.show {
+            display: flex;
+        }
+
+        .file-feedback i {
+            color: var(--accent-green);
+        }
+
+        .file-feedback .fname {
+            color: var(--text-primary);
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* ----- Buttons ----- */
+        .btn {
+            padding: 12px 16px;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-weight: 700;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all var(--transition);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--text-primary);
+            border: 1px solid transparent;
+        }
+
+        .btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            filter: brightness(1.1);
+        }
+
+        .btn:active:not(:disabled) {
+            transform: scale(0.97);
+        }
+
+        .btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            transform: none;
+            filter: none;
+        }
+
+        .btn-start {
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+            color: #fff;
+            box-shadow: 0 4px 15px rgba(0, 229, 255, 0.25);
+        }
+
+        .btn-start:hover:not(:disabled) {
+            box-shadow: 0 6px 25px rgba(0, 229, 255, 0.4);
+        }
+
+        .btn-stop {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--accent-red);
+            border-color: rgba(239, 68, 68, 0.2);
+        }
+
+        .btn-stop:hover:not(:disabled) {
+            background: rgba(239, 68, 68, 0.25);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        .btn-quit {
+            background: transparent;
+            color: var(--text-secondary);
+            border-color: var(--border-glass);
+        }
+
+        .btn-quit:hover:not(:disabled) {
+            background: rgba(239, 68, 68, 0.1);
+            color: #fca5a5;
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-row .btn {
+            flex: 1;
+        }
+
+        /* ----- Confidence Slider ----- */
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 4px;
+            border-radius: 4px;
+            background: #1e293b;
+            outline: none;
+            padding: 0;
+            margin-top: 6px;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: radial-gradient(circle, var(--accent-cyan), var(--accent-blue));
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(0, 229, 255, 0.4);
+            border: 2px solid #0f172a;
+        }
+
+        .slider-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: #475569;
+            margin-top: 4px;
+        }
+
+        /* ----- Status Box ----- */
+        .status-box {
+            background: var(--bg-card);
+            border-radius: var(--radius-sm);
+            padding: 12px 16px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            border-left: 4px solid var(--accent-cyan);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-height: 48px;
+            transition: border-color var(--transition);
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #475569;
+            flex-shrink: 0;
+            transition: background 0.3s;
+        }
+
+        .status-dot.on {
+            background: var(--accent-green);
+            box-shadow: 0 0 12px rgba(74, 222, 128, 0.5);
+            animation: pulse-dot 1.5s infinite;
+        }
+
+        .status-dot.err {
+            background: var(--accent-red);
+            box-shadow: 0 0 8px rgba(248, 113, 113, 0.4);
+        }
+
+        .status-dot.quit {
+            background: #facc15;
+            box-shadow: 0 0 12px rgba(250, 204, 21, 0.4);
+        }
+
+        .status-dot.loading {
+            background: #60a5fa;
+            box-shadow: 0 0 8px rgba(96, 165, 250, 0.4);
+            animation: pulse-dot 1s infinite;
+        }
+
+        @keyframes pulse-dot {
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            50% {
+                opacity: 0.5;
+                transform: scale(0.8);
+            }
+        }
+
+        /* ============================================================
+               NOTIFICATIONS (Toast)
+               ============================================================ */
+        .toast-container {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            z-index: 9999;
+            pointer-events: none;
+        }
+
+        .toast {
+            padding: 14px 20px;
+            background: rgba(10, 10, 24, 0.95);
+            backdrop-filter: blur(12px);
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-glass);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: var(--text-primary);
+            font-size: 14px;
+            font-weight: 500;
+            pointer-events: auto;
+            min-width: 280px;
+            max-width: 400px;
+            transform: translateX(120%);
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .toast.show {
+            transform: translateX(0);
+        }
+
+        .toast .icon {
+            font-size: 20px;
+        }
+
+        .toast.success .icon {
+            color: var(--accent-green);
+        }
+        .toast.error .icon {
+            color: var(--accent-red);
+        }
+        .toast.info .icon {
+            color: var(--accent-cyan);
+        }
+        .toast.warning .icon {
+            color: #facc15;
+        }
+
+        /* ============================================================
+               RESPONSIVE
+               ============================================================ */
+        @media (max-width: 1024px) {
+            .dashboard {
+                flex-direction: column;
+                height: auto;
+                max-height: none;
+                padding: 16px;
+            }
+
+            .panel {
+                width: 100%;
+                min-width: unset;
+                flex-direction: row;
+                flex-wrap: wrap;
+                max-height: 60vh;
+                padding: 18px;
+                gap: 12px;
+            }
+
+            .panel>* {
+                flex: 1 1 200px;
+            }
+
+            .video-container {
+                min-height: 300px;
+            }
+        }
+
+        @media (max-width: 600px) {
+            .panel {
+                max-height: 70vh;
+            }
+
+            .btn-row {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ============================================================
+    DASHBOARD
+    ============================================================ -->
+    <div class="dashboard" id="dashboard">
+
+        <!-- ===== VIDEO PANEL ===== -->
+        <div class="video-container" id="videoContainer">
+            <div class="scanline" id="scanline"></div>
+            <img id="videoFeed" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" />
+            <!-- Placeholder -->
+            <div class="video-placeholder" id="videoPlaceholder">
+                <div class="icon"><i class="fas fa-robot"></i></div>
+                <h3>VisionTrack AI</h3>
+                <p>Connect a camera or upload a video to begin</p>
+            </div>
+            <!-- Loading overlay -->
+            <div class="loading-overlay" id="loadingOverlay">
+                <div class="spinner"></div>
+                <span style="color: var(--text-secondary);">Initialising camera...</span>
+            </div>
+        </div>
+
+        <!-- ===== RIGHT PANEL ===== -->
+        <div class="panel" id="panel">
+
+            <!-- Header -->
+            <div class="panel-header">
+                <i class="fas fa-robot"></i>
+                <h2>VisionTrack AI</h2>
+                <span class="badge" id="badge"><i class="fas fa-circle" style="font-size:8px;"></i> Idle</span>
+            </div>
+
+            <!-- Source -->
+            <div class="group">
+                <div class="group-label"><i class="fas fa-video"></i> Video Source</div>
+                <input type="text" id="sourceInput" placeholder="0 for webcam, or file path" />
+                <div style="display:flex; gap:8px; margin-top:8px;">
+                    <button class="btn btn-secondary" id="webcamBtn"><i class="fas fa-camera"></i> Webcam</button>
+                    <button class="btn btn-secondary" id="browseBtn"><i class="fas fa-folder-open"></i> Browse</button>
+                </div>
+                <div class="file-feedback" id="fileFeedback">
+                    <i class="fas fa-check-circle"></i> <span class="fname" id="fileNameDisplay"></span>
+                </div>
+                <input type="file" id="fileInput" accept="video/*" style="display:none;" />
+            </div>
+
+            <!-- Model -->
+            <div class="group">
+                <div class="group-label"><i class="fas fa-brain"></i> AI Model</div>
+                <select id="modelSelect">
+                    <option value="yolov8n.pt">yolov8n.pt (Fast)</option>
+                    <option value="yolov8s.pt" selected>yolov8s.pt (Balanced)</option>
+                    <option value="yolov8m.pt">yolov8m.pt (Accurate)</option>
+                </select>
+                <button class="btn btn-secondary" id="reloadModelBtn" style="width:100%; margin-top:8px;">
+                    <i class="fas fa-sync-alt"></i> <span id="reloadText">Reload Model</span>
+                </button>
+            </div>
+
+            <!-- Confidence -->
+            <div class="group">
+                <div class="group-label"><i class="fas fa-sliders-h"></i> Confidence <span
+                        style="margin-left:auto; color:var(--accent-cyan); font-weight:700;" id="confDisplay">0.50</span>
+                </div>
+                <input type="range" id="confSlider" min="0.1" max="0.9" step="0.05" value="0.5" />
+                <div class="slider-labels"><span>Low</span><span>High</span></div>
+            </div>
+
+            <!-- Controls -->
+            <div class="btn-row">
+                <button class="btn btn-start" id="startBtn" disabled><i class="fas fa-play"></i> Start</button>
+                <button class="btn btn-stop" id="stopBtn" disabled><i class="fas fa-stop"></i> Stop</button>
+            </div>
+            <button class="btn btn-quit" id="quitBtn"><i class="fas fa-sign-out-alt"></i> Quit Session</button>
+
+            <!-- Status -->
+            <div class="status-box" id="statusBox">
+                <span class="status-dot" id="statusDot"></span>
+                <span id="statusMessage">Ready — set a source and press Start</span>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- ============================================================
+    TOAST CONTAINER
+    ============================================================ -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- ============================================================
+    JAVASCRIPT – MODULAR & COMMENTED
+    ============================================================ -->
+    <script>
+        (function() {
+            'use strict';
+
+            // ============================================================
+            // DOM REFS
+            // ============================================================
+            const DOM = {
+                videoFeed: document.getElementById('videoFeed'),
+                videoContainer: document.getElementById('videoContainer'),
+                videoPlaceholder: document.getElementById('videoPlaceholder'),
+                loadingOverlay: document.getElementById('loadingOverlay'),
+                scanline: document.getElementById('scanline'),
+                badge: document.getElementById('badge'),
+
+                sourceInput: document.getElementById('sourceInput'),
+                modelSelect: document.getElementById('modelSelect'),
+                confSlider: document.getElementById('confSlider'),
+                confDisplay: document.getElementById('confDisplay'),
+                startBtn: document.getElementById('startBtn'),
+                stopBtn: document.getElementById('stopBtn'),
+                quitBtn: document.getElementById('quitBtn'),
+                statusMessage: document.getElementById('statusMessage'),
+                statusDot: document.getElementById('statusDot'),
+                statusBox: document.getElementById('statusBox'),
+                fileFeedback: document.getElementById('fileFeedback'),
+                fileNameDisplay: document.getElementById('fileNameDisplay'),
+                fileInput: document.getElementById('fileInput'),
+                webcamBtn: document.getElementById('webcamBtn'),
+                browseBtn: document.getElementById('browseBtn'),
+                reloadModelBtn: document.getElementById('reloadModelBtn'),
+                reloadText: document.getElementById('reloadText'),
+                toastContainer: document.getElementById('toastContainer'),
+                dashboard: document.getElementById('dashboard'),
+            };
+
+            // ============================================================
+            // STATE
+            // ============================================================
+            const state = {
+                isStreaming: false,
+                isQuit: false,
+                isModelLoading: false,
+                source: '',
+
+            };
+
+            const STORAGE_KEY = 'ai_dashboard_v2';
+
+            // ============================================================
+            // UTILITY: Toast Notifications
+            // ============================================================
+            function showToast(message, type = 'info', duration = 4000) {
+                const container = DOM.toastContainer;
+                const toast = document.createElement('div');
+                toast.className = `toast ${type}`;
+                const icons = {
+                    success: 'fas fa-check-circle',
+                    error: 'fas fa-exclamation-circle',
+                    warning: 'fas fa-exclamation-triangle',
+                    info: 'fas fa-info-circle',
+                };
+                toast.innerHTML = `
+                    <span class="icon"><i class="${icons[type] || icons.info}"></i></span>
+                    <span>${message}</span>
+                `;
+                container.appendChild(toast);
+                // Trigger enter animation
+                requestAnimationFrame(() => {
+                    toast.classList.add('show');
+                });
+                // Auto remove after duration
+                const timer = setTimeout(() => {
+                    toast.classList.remove('show');
+                    setTimeout(() => toast.remove(), 400);
+                }, duration);
+                // Click to dismiss
+                toast.addEventListener('click', () => {
+                    clearTimeout(timer);
+                    toast.classList.remove('show');
+                    setTimeout(() => toast.remove(), 400);
+                });
+            }
+
+            // ============================================================
+            // UTILITY: API Helpers
+            // ============================================================
+            async function apiPost(path, body) {
+                const opts = { method: 'POST' };
+                if (body) {
+                    opts.headers = { 'Content-Type': 'application/json' };
+                    opts.body = JSON.stringify(body);
+                }
+                const res = await fetch(path, opts);
+                if (!res.ok) {
+                    const errText = await res.text();
+                    throw new Error(errText || `HTTP ${res.status}`);
+                }
+                return res.json();
+            }
+
+            // ============================================================
+            // UTILITY: Anime.js Counter Animations
+            // ============================================================
+            // ============================================================
+            // UI UPDATES
+            // ============================================================
+            function setStatus(msg, type) {
+                DOM.statusMessage.textContent = msg;
+                DOM.statusDot.className = 'status-dot';
+                if (type === 'on') DOM.statusDot.classList.add('on');
+                else if (type === 'err') DOM.statusDot.classList.add('err');
+                else if (type === 'quit') DOM.statusDot.classList.add('quit');
+                else if (type === 'loading') DOM.statusDot.classList.add('loading');
+            }
+
+            function setBadge(state) {
+                const badge = DOM.badge;
+                badge.className = 'badge';
+                if (state === 'on') {
+                    badge.classList.add('on');
+                    badge.innerHTML = '<i class="fas fa-circle" style="font-size:8px;"></i> Streaming';
+                } else if (state === 'off') {
+                    badge.classList.add('off');
+                    badge.innerHTML = '<i class="fas fa-circle" style="font-size:8px;"></i> Offline';
+                } else {
+                    badge.innerHTML = '<i class="fas fa-circle" style="font-size:8px;"></i> Idle';
+                }
+            }
+
+            function showLoading(show) {
+                DOM.loadingOverlay.classList.toggle('show', show);
+            }
+
+            function setStartButtonEnabled(enabled) {
+                DOM.startBtn.disabled = !enabled;
+            }
+
+            function setStopButtonEnabled(enabled) {
+                DOM.stopBtn.disabled = !enabled;
+            }
+
+            // ============================================================
+            // SOURCE MANAGEMENT
+            // ============================================================
+            async function applySource(val) {
+                const source = String(val).trim();
+                if (!source) {
+                    setStartButtonEnabled(false);
+                    return;
+                }
+                try {
+                    const data = await apiPost('/set_source', { source });
+                    setStatus(data.message || 'Source set', '');
+                    DOM.fileFeedback.classList.remove('show');
+                    state.source = source;
+                    setStartButtonEnabled(true);
+                    saveState();
+                    showToast(`Source set: ${source}`, 'success');
+                } catch (err) {
+                    setStatus('Source error: ' + err.message, 'err');
+                    setStartButtonEnabled(false);
+                    showToast(`Failed to set source: ${err.message}`, 'error');
+                }
+            }
+
+            function setSource(val) {
+                DOM.sourceInput.value = val;
+                applySource(val);
+            }
+
+            // ============================================================
+            // WEBCAM – with permission handling
+            // ============================================================
+            async function handleWebcam() {
+                try {
+                    setSource('0');
+                    await startStream();
+                } catch (err) {
+                    setStatus('Webcam error: ' + err.message, 'err');
+                }
+            }
+
+            // ============================================================
+            // VIDEO UPLOAD – with validation
+            // ============================================================
+            const ALLOWED_VIDEO_EXTENSIONS = ['mp4', 'avi', 'mov', 'mkv', 'webm'];
+
+            function validateVideoFile(file) {
+                const ext = file.name.split('.').pop().toLowerCase();
+                if (!ALLOWED_VIDEO_EXTENSIONS.includes(ext)) {
+                    throw new Error(`Unsupported file type: .${ext}. Allowed: ${ALLOWED_VIDEO_EXTENSIONS.join(', ')}`);
+                }
+                // Also check MIME type (optional)
+                const validMime = ['video/mp4', 'video/x-msvideo', 'video/quicktime', 'video/x-matroska', 'video/webm'];
+                if (!validMime.includes(file.type)) {
+                    // Some browsers may not have correct MIME, so we rely on extension.
+                }
+                return true;
+            }
+
+            async function handleFileSelect(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                try {
+                    validateVideoFile(file);
+                    setStatus('Uploading...', 'loading');
+                    const formData = new FormData();
+                    formData.append('video', file);
+                    const res = await fetch('/upload_video', { method: 'POST', body: formData });
+                    if (!res.ok) {
+                        const err = await res.text();
+                        throw new Error(err || 'Upload failed');
+                    }
+                    const data = await res.json();
+                    if (data.status === 'success') {
+                        DOM.sourceInput.value = data.path;
+                        DOM.fileFeedback.classList.add('show');
+                        DOM.fileNameDisplay.textContent = file.name;
+                        setStatus('Uploaded successfully', '');
+                        showToast(`Video "${file.name}" uploaded`, 'success');
+                        // Automatically start stream
+                        await startStream();
+                    } else {
+                        throw new Error(data.message || 'Upload failed');
+                    }
+                } catch (err) {
+                    setStatus('Upload error: ' + err.message, 'err');
+                    showToast('Upload failed: ' + err.message, 'error');
+                }
+                e.target.value = '';
+            }
+
+            // ============================================================
+            // STREAM CONTROLS
+            // ============================================================
+            async function startStream() {
+                if (state.isQuit) return;
+                // Ensure source is set – handle both empty AND changed source
+                const inputVal = DOM.sourceInput.value.trim();
+                if (inputVal && inputVal !== state.source) {
+                    await applySource(inputVal);
+                }
+                if (!state.source) {
+                    showToast('Please set a video source first.', 'warning');
+                    setStatus('No source selected', 'err');
+                    return;
+                }
+                try {
+                    const data = await apiPost('/start');
+                    if (data.status === 'error') throw new Error(data.message);
+                    state.isStreaming = true;
+                    setStatus('Streaming...', 'on');
+                    setBadge('on');
+                    DOM.videoContainer.classList.add('active');
+                    DOM.videoPlaceholder.style.display = 'none';
+                    DOM.startBtn.disabled = true;
+                    DOM.stopBtn.disabled = false;
+                    // Load video feed with cache buster
+                    const feedUrl = "{{ url_for('video_feed') }}?" + Date.now();
+                    DOM.videoFeed.src = feedUrl;
+                    showToast('Stream started successfully', 'success');
+                    saveState();
+                } catch (err) {
+                    setStatus('Start error: ' + err.message, 'err');
+                    showToast('Failed to start stream: ' + err.message, 'error');
+                    state.isStreaming = false;
+                    DOM.startBtn.innerHTML = '<i class="fas fa-play"></i> Start';
+                    DOM.startBtn.className = 'btn btn-start';
+                    DOM.stopBtn.disabled = true;
+                }
+            }
+
+            async function stopStream() {
+                if (state.isQuit) return;
+                try {
+                    const data = await apiPost('/stop');
+                    if (data.status === 'error') throw new Error(data.message);
+                    state.isStreaming = false;
+                    setStatus('Stopped', '');
+                    setBadge('idle');
+                    DOM.videoContainer.classList.remove('active');
+                    DOM.videoPlaceholder.style.display = 'flex';
+                    DOM.startBtn.disabled = false;
+                    DOM.stopBtn.disabled = true;
+                    // Clear video feed (restore transparent placeholder)
+                    DOM.videoFeed.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+                    showToast('Stream stopped', 'info');
+                    saveState();
+                } catch (err) {
+                    setStatus('Stop error: ' + err.message, 'err');
+                    showToast('Failed to stop stream: ' + err.message, 'error');
+                }
+            }
+
+            async function toggleStream() {
+                if (state.isQuit) return;
+                if (state.isStreaming) {
+                    await stopStream();
+                } else {
+                    await startStream();
+                }
+            }
+
+            // ============================================================
+            // QUIT SESSION
+            // ============================================================
+            function quitSession() {
+                if (state.isQuit) return;
+                // Stop stream if running
+                if (state.isStreaming) {
+                    apiPost('/stop').catch(() => {});
+                }
+                state.isQuit = true;
+                // UI cleanup
+                DOM.videoContainer.classList.remove('active');
+                DOM.videoFeed.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+                DOM.videoPlaceholder.style.display = 'flex';
+                setBadge('off');
+                setStatus('Session ended – refresh to restart', 'quit');
+                DOM.startBtn.disabled = true;
+                DOM.stopBtn.disabled = true;
+                DOM.quitBtn.disabled = true;
+                DOM.sourceInput.disabled = true;
+                DOM.modelSelect.disabled = true;
+                DOM.confSlider.disabled = true;
+                DOM.webcamBtn.disabled = true;
+                DOM.browseBtn.disabled = true;
+                DOM.reloadModelBtn.disabled = true;
+                showToast('Session ended', 'warning', 3000);
+            }
+
+            // ============================================================
+            // MODEL RELOAD
+            // ============================================================
+            async function reloadModel() {
+                if (state.isModelLoading) return;
+                const model = DOM.modelSelect.value;
+                state.isModelLoading = true;
+                DOM.reloadText.textContent = 'Loading...';
+                DOM.reloadModelBtn.disabled = true;
+                setStatus('Loading model ' + model + '...', 'loading');
+                try {
+                    const data = await apiPost('/set_model', { model });
+                    if (data.status === 'error') throw new Error(data.message);
+                    setStatus(data.message || 'Model loaded', '');
+                    showToast(`Model "${model}" loaded successfully`, 'success');
+                    saveState();
+                } catch (err) {
+                    setStatus('Model error: ' + err.message, 'err');
+                    showToast('Failed to load model: ' + err.message, 'error');
+                } finally {
+                    state.isModelLoading = false;
+                    DOM.reloadText.textContent = 'Reload Model';
+                    DOM.reloadModelBtn.disabled = false;
+                }
+            }
+
+            // ============================================================
+            // CONFIDENCE SLIDER
+            // ============================================================
+            function updateConf() {
+                const val = parseFloat(DOM.confSlider.value);
+                DOM.confDisplay.textContent = val.toFixed(2);
+                apiPost('/set_conf', { conf: val })
+                    .then(data => {
+                        if (data.status === 'success') saveState();
+                    })
+                    .catch(() => {});
+            }
+
+            // ============================================================
+            // LOCAL STORAGE
+            // ============================================================
+            function saveState() {
+                try {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                        source: DOM.sourceInput.value,
+                        model: DOM.modelSelect.value,
+                        conf: DOM.confSlider.value,
+                        fileName: DOM.fileNameDisplay.textContent || ''
+                    }));
+                } catch (e) {}
+            }
+
+            function loadState() {
+                try {
+                    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+                    if (saved) {
+                        if (saved.source) DOM.sourceInput.value = saved.source;
+                        if (saved.model) DOM.modelSelect.value = saved.model;
+                        if (saved.conf) {
+                            DOM.confSlider.value = saved.conf;
+                            DOM.confDisplay.textContent = parseFloat(saved.conf).toFixed(2);
+                        }
+                        if (saved.fileName) {
+                            DOM.fileFeedback.classList.add('show');
+                            DOM.fileNameDisplay.textContent = saved.fileName;
+                        }
+                        // Apply source to backend but don't auto-start
+                        if (saved.source) {
+                            applySource(saved.source).catch(() => {});
+                        }
+                        // Apply model and confidence
+                        if (saved.model) {
+                            apiPost('/set_model', { model: saved.model }).catch(() => {});
+                        }
+                        if (saved.conf) {
+                            apiPost('/set_conf', { conf: parseFloat(saved.conf) }).catch(() => {});
+                        }
+                    }
+                } catch (e) {}
+            }
+
+            // ============================================================
+            // EVENT LISTENERS
+            // ============================================================
+            DOM.startBtn.addEventListener('click', toggleStream);
+            DOM.stopBtn.addEventListener('click', toggleStream);
+            DOM.quitBtn.addEventListener('click', quitSession);
+            DOM.webcamBtn.addEventListener('click', handleWebcam);
+            DOM.browseBtn.addEventListener('click', () => DOM.fileInput.click());
+            DOM.fileInput.addEventListener('change', handleFileSelect);
+            DOM.reloadModelBtn.addEventListener('click', reloadModel);
+            DOM.sourceInput.addEventListener('change', function() {
+                applySource(this.value);
+            });
+            DOM.sourceInput.addEventListener('blur', function() {
+                if (this.value.trim()) applySource(this.value);
+            });
+            DOM.confSlider.addEventListener('input', updateConf);
+
+            // Drag & Drop on video container
+            DOM.videoContainer.addEventListener('dragover', e => {
+                e.preventDefault();
+                DOM.videoContainer.style.borderColor = 'var(--accent-cyan)';
+            });
+            DOM.videoContainer.addEventListener('dragleave', () => {
+                DOM.videoContainer.style.borderColor = '';
+            });
+            DOM.videoContainer.addEventListener('drop', e => {
+                e.preventDefault();
+                DOM.videoContainer.style.borderColor = '';
+                const files = e.dataTransfer.files;
+                if (files.length && files[0].type.startsWith('video/')) {
+                    const dt = new DataTransfer();
+                    dt.items.add(files[0]);
+                    DOM.fileInput.files = dt.files;
+                    DOM.fileInput.dispatchEvent(new Event('change'));
+                } else {
+                    showToast('Please drop a valid video file.', 'warning');
+                }
+            });
+
+            // Video error handling
+            DOM.videoFeed.addEventListener('error', function() {
+                if (!state.isStreaming || state.isQuit) return;
+                setStatus('Video feed error – check source', 'err');
+                showToast('Video stream error. Please stop and restart.', 'error');
+                DOM.videoContainer.classList.remove('active');
+            });
+
+            // ============================================================
+            // ANIMATION: Dashboard entrance
+            // ============================================================
+            anime({
+                targets: DOM.dashboard,
+                opacity: [0, 1],
+                translateY: [30, 0],
+                duration: 800,
+                easing: 'easeOutQuad',
+            });
+
+            // Panel elements staggered entrance
+            const panelItems = DOM.panel.querySelectorAll('.panel-header, .group, .btn-row, .btn-quit, .status-box');
+            anime({
+                targets: panelItems,
+                opacity: [0, 1],
+                translateX: [30, 0],
+                duration: 600,
+                delay: anime.stagger(80, { start: 200 }),
+                easing: 'easeOutQuad',
+            });
+
+            // ============================================================
+            // INIT
+            // ============================================================
+            loadState();
+
+            // Enable start button if source is pre-filled
+            if (DOM.sourceInput.value.trim()) {
+                setStartButtonEnabled(true);
+            } else {
+                setStartButtonEnabled(false);
+            }
+
+            setStatus('Ready — set a source and press Start', '');
+            setBadge('idle');
+
+            // Cleanup on page unload
+            window.addEventListener('beforeunload', function() {
+                if (state.isStreaming) {
+                    apiPost('/stop').catch(() => {});
+                }
+            });
+
+        })();
+    </script>
+</body>
+</html>

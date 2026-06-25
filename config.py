@@ -1,0 +1,13 @@
+import torch
+
+MODEL_NAME = 'yolov8n.pt'
+OUTPUT_VIDEO_PATH = None
+CONFIDENCE_THRESHOLD = 0.10
+NMS_IOU_THRESHOLD = 0.65
+MAX_DETECTIONS = 300
+FRAME_WIDTH = 640
+FRAME_HEIGHT = 480
+WEBCAM_FPS = 30
+JPEG_QUALITY = 75
+DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+TRACKER_CONFIG = 'bytetrack.yaml'
